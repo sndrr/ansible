@@ -1203,10 +1203,17 @@ def _build_files_manifest_walk(b_collection_path, namespace, name, ignore_patter
 
     manifest = _make_manifest()
 
+    def _discover_relative_base_directory(b_path: bytes, b_top_level_dir: bytes) -> bytes:
+        if b_path == b_top_level_dir:
+            return b''
+        common_prefix = os.path.commonpath((b_top_level_dir, b_path))
+        b_rel_base_dir = os.path.relpath(b_path, common_prefix)
+        return b_rel_base_dir.lstrip(os.path.sep.encode())
+
     def _walk(b_path, b_top_level_dir):
+        b_rel_base_dir = _discover_relative_base_directory(b_path, b_top_level_dir)
         for b_item in os.listdir(b_path):
             b_abs_path = os.path.join(b_path, b_item)
-            b_rel_base_dir = b'' if b_path == b_top_level_dir else b_path[len(b_top_level_dir) + 1:]
             b_rel_path = os.path.join(b_rel_base_dir, b_item)
             rel_path = to_text(b_rel_path, errors='surrogate_or_strict')
 
@@ -1817,15 +1824,15 @@ def _resolve_depenency_map(
         elif not req.specifier.contains(RESOLVELIB_VERSION.vstring):
             raise AnsibleError(f"ansible-galaxy requires {req.name}{req.specifier}")
 
-    if allow_pre_release:
-        pre_release_hint = ''
-    else:
-        pre_release_hint = 'Hint: Pre-releases are not installed by default unless the specific version is given. To enable pre-releases, use --pre.'
+    pre_release_hint = '' if allow_pre_release else (
+        'Hint: Pre-releases hosted on Galaxy or Automation Hub are not '
+        'installed by default unless a specific version is requested. '
+        'To enable pre-releases globally, use --pre.'
+    )
 
     collection_dep_resolver = build_collection_dependency_resolver(
         galaxy_apis=galaxy_apis,
         concrete_artifacts_manager=concrete_artifacts_manager,
-        user_requirements=requested_requirements,
         preferred_candidates=preferred_candidates,
         with_deps=not no_deps,
         with_pre_releases=allow_pre_release,
